@@ -17,8 +17,10 @@ import javax.crypto.spec.SecretKeySpec
 class TokenProvider(
     @Value("\${secret-key}")
     private val secretKey: String,
-    @Value("\${expiration-hours}")
-    private val expirationHours: Long,
+    @Value("\${expiration-minutes}")
+    private val expirationMinutes: Long,
+    @Value("\${refresh-expiration-hours}")
+    private val refreshExpirationHours: Long,
     @Value("\${issuer}")
     private val issuer: String
 ) {
@@ -27,7 +29,14 @@ class TokenProvider(
         .setSubject(userSpecification)
         .setIssuer(issuer)
         .setIssuedAt(Timestamp.valueOf(LocalDateTime.now()))
-        .setExpiration(Date.from(Instant.now().plus(expirationHours, ChronoUnit.HOURS)))
+        .setExpiration(Date.from(Instant.now().plus(expirationMinutes, ChronoUnit.MINUTES)))
+        .compact()!!
+
+    fun createRefreshToken() = Jwts.builder()
+        .signWith(SecretKeySpec(secretKey.toByteArray(), SignatureAlgorithm.HS512.jcaName))
+        .setIssuer(issuer)
+        .setIssuedAt(Timestamp.valueOf(LocalDateTime.now()))
+        .setExpiration(Date.from(Instant.now().plus(refreshExpirationHours, ChronoUnit.HOURS)))
         .compact()!!
 
     fun validateTokenAndGetSubject(token: String?): String? = Jwts.parserBuilder()
