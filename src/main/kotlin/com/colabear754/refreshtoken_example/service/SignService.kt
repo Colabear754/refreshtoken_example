@@ -31,7 +31,7 @@ class SignService(
     fun signIn(request: SignInRequest): SignInResponse {
         val member = memberRepository.findByAccount(request.account)
             ?.takeIf { encoder.matches(request.password, it.password) } ?: throw IllegalArgumentException("아이디 또는 비밀번호가 일치하지 않습니다.")
-        val accessToken = tokenProvider.createToken("${member.id}:${member.type}")
+        val accessToken = tokenProvider.createAccessToken("${member.id}:${member.type}")
         val refreshToken = tokenProvider.createRefreshToken()
         memberRefreshTokenRepository.findByIdOrNull(member.id)?.updateRefreshToken(refreshToken)
             ?: memberRefreshTokenRepository.save(MemberRefreshToken(member, refreshToken))

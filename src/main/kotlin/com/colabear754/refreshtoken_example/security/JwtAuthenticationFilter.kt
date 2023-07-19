@@ -1,5 +1,6 @@
 package com.colabear754.refreshtoken_example.security
 
+import io.jsonwebtoken.ExpiredJwtException
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -18,11 +19,13 @@ import org.springframework.web.filter.OncePerRequestFilter
 class JwtAuthenticationFilter(private val tokenProvider: TokenProvider) : OncePerRequestFilter() {
     override fun doFilterInternal(request: HttpServletRequest, response: HttpServletResponse, filterChain: FilterChain) {
         try {
-            val token = parseBearerToken(request)
-            val user = parseUserSpecification(token)
-            UsernamePasswordAuthenticationToken.authenticated(user, token, user.authorities)
+            val accessToken = parseBearerToken(request, HttpHeaders.AUTHORIZATION)
+            val user = parseUserSpecification(accessToken)
+            UsernamePasswordAuthenticationToken.authenticated(user, accessToken, user.authorities)
                 .apply { details = WebAuthenticationDetails(request) }
                 .also { SecurityContextHolder.getContext().authentication = it }
+        } catch (e: ExpiredJwtException) {
+            reissueAccessToken(request, response, e)
         } catch (e: Exception) {
             request.setAttribute("exception", e)
         }
@@ -30,7 +33,7 @@ class JwtAuthenticationFilter(private val tokenProvider: TokenProvider) : OncePe
         filterChain.doFilter(request, response)
     }
 
-    private fun parseBearerToken(request: HttpServletRequest) = request.getHeader(HttpHeaders.AUTHORIZATION)
+    private fun parseBearerToken(request: HttpServletRequest, headerName: String) = request.getHeader(headerName)
         .takeIf { it?.startsWith("Bearer ", true) ?: false }?.substring(7)
 
     private fun parseUserSpecification(token: String?) = (
@@ -39,4 +42,20 @@ class JwtAuthenticationFilter(private val tokenProvider: TokenProvider) : OncePe
                 ?: "anonymous:anonymous"
             ).split(":")
         .let { User(it[0], "", listOf(SimpleGrantedAuthority(it[1]))) }
+
+    private fun reissueAccessToken(request: HttpServletRequest, response: HttpServletResponse, exception: Exception) {
+        try {
+            val refreshToken = parseBearerToken(request, "Refresh-Token") ?: throw exception
+            val oldAccessToken = parseBearerToken(request, HttpHeaders.AUTHORIZATION)!!
+            tokenProvider.validateRefreshToken(refreshToken, oldAccessToken)
+            val newAccessToken = tokenProvider.recreateAccessToken(oldAccessToken)
+            val user = parseUserSpecification(newAccessToken)
+            UsernamePasswordAuthenticationToken.authenticated(user, newAccessToken, user.authorities)
+                .apply { details = WebAuthenticationDetails(request) }
+                .also { SecurityContextHolder.getContext().authentication = it }
+            response.setHeader("New-Access-Token", newAccessToken)
+        } catch (e: Exception) {
+            request.setAttribute("exception", e)
+        }
+    }
 }
