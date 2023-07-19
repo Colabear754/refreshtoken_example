@@ -4,6 +4,7 @@ import com.colabear754.refreshtoken_example.common.MemberType
 import com.colabear754.refreshtoken_example.dto.SignInRequest
 import com.colabear754.refreshtoken_example.dto.SignUpRequest
 import com.colabear754.refreshtoken_example.entity.Member
+import com.colabear754.refreshtoken_example.repository.MemberRefreshTokenRepository
 import com.colabear754.refreshtoken_example.repository.MemberRepository
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
@@ -18,12 +19,14 @@ import org.springframework.security.crypto.password.PasswordEncoder
 class SignServiceTest @Autowired constructor(
     private val signService: SignService,
     private val memberRepository: MemberRepository,
+    private val memberRefreshTokenRepository: MemberRefreshTokenRepository,
     private val encoder: PasswordEncoder
 ) {
     @BeforeEach
     @AfterEach
     fun clear() {
-        memberRepository.deleteAll()
+        memberRefreshTokenRepository.deleteAllInBatch()
+        memberRepository.deleteAllInBatch()
     }
 
     @Test
